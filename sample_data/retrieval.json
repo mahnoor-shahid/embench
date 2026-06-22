@@ -1,0 +1,22 @@
+{
+  "name": "mini-faq",
+  "queries": {
+    "q1": "how do I reset my password",
+    "q2": "what payment methods do you accept",
+    "q3": "how to cancel my subscription"
+  },
+  "corpus": {
+    "d1": "To reset your password, click the forgot password link on the login page and follow the email instructions.",
+    "d2": "We accept Visa, Mastercard, American Express, and PayPal for all purchases.",
+    "d3": "You can cancel your subscription at any time from the billing section of your account settings.",
+    "d4": "Our office hours are Monday to Friday, nine to five.",
+    "d5": "Forgot your password? Use the password recovery option to receive a reset link by email.",
+    "d6": "Subscriptions renew automatically; to stop renewal, cancel before the billing date in account settings.",
+    "d7": "Shipping is free on orders over fifty dollars within the continental United States."
+  },
+  "qrels": {
+    "q1": { "d1": 2, "d5": 1 },
+    "q2": { "d2": 2 },
+    "q3": { "d3": 2, "d6": 1 }
+  }
+}

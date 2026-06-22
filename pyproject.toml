@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "embench"
+version = "0.1.0"
+description = "Benchmark embedding models on your own data — choose the right model for your dataset, not the leaderboard's."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Mahnoor" }]
+keywords = ["embeddings", "benchmark", "retrieval", "rag", "mteb", "nlp"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+# Core deps are intentionally light: numpy for math, scikit-learn for the
+# classification/clustering probes, pandas for reporting.
+dependencies = [
+    "numpy>=1.21",
+    "scikit-learn>=1.0",
+    "pandas>=1.3",
+]
+
+[project.optional-dependencies]
+local = ["sentence-transformers>=2.2"]
+openai = ["openai>=1.0"]
+cohere = ["cohere>=5.0"]
+voyage = ["voyageai>=0.2"]
+# convenience: install every backend
+all = [
+    "sentence-transformers>=2.2",
+    "openai>=1.0",
+    "cohere>=5.0",
+    "voyageai>=0.2",
+]
+dev = ["pytest>=7.0"]
+
+[project.urls]
+Homepage = "https://github.com/yourname/embench"
+Issues = "https://github.com/yourname/embench/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["embench"]
