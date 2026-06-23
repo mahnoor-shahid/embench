@@ -30,13 +30,23 @@ from .models import (
 from .reporting import BenchmarkResults
 from .runners import Benchmark
 from .tasks import ClassificationTask, ClusteringTask, RetrievalTask, Task
+from .utils import load_env
 
 __version__ = "0.1.0"
+
+_LAZY_MODELS = (
+    "SentenceTransformerModel",
+    "OpenAIModel",
+    "CohereModel",
+    "VoyageModel",
+    "GoogleModel",
+    "HuggingFaceModel",
+)
 
 
 def __getattr__(name):
     # Lazy access to adapters with optional heavy dependencies.
-    if name in ("SentenceTransformerModel", "OpenAIModel", "CohereModel", "VoyageModel"):
+    if name in _LAZY_MODELS:
         from . import models
 
         return getattr(models, name)
@@ -45,6 +55,7 @@ def __getattr__(name):
 
 __all__ = [
     "__version__",
+    "load_env",
     # models
     "BaseEmbeddingModel",
     "DummyModel",
@@ -53,6 +64,8 @@ __all__ = [
     "OpenAIModel",
     "CohereModel",
     "VoyageModel",
+    "GoogleModel",
+    "HuggingFaceModel",
     # datasets
     "RetrievalDataset",
     "ClassificationDataset",

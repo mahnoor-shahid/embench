@@ -1,4 +1,6 @@
 """Tests: metric correctness on known inputs + full pipeline runs."""
+import os
+
 import numpy as np
 
 import embench as eb
@@ -60,6 +62,133 @@ def test_dummy_is_deterministic():
     a = m.encode(["hello world"])
     b = m.encode(["hello world"])
     assert np.array_equal(a, b)
+
+
+def test_results_include_performance_metrics():
+    queries = {"q1": "alpha beta"}
+    corpus = {"d1": "alpha beta", "d2": "gamma delta"}
+    qrels = {"q1": {"d1": 1}}
+    ds = eb.RetrievalDataset(queries, corpus, qrels)
+    results = eb.Benchmark(
+        [eb.DummyModel(dim=32)], tasks=[eb.RetrievalTask(ds, k_values=[1])]
+    ).run(verbose=False)
+
+    perf = results.performance()
+    assert not perf.empty
+    assert {"encode_seconds", "texts_encoded", "texts_per_sec"} <= set(perf.columns)
+    # 2 docs + 1 query were encoded
+    assert perf.loc["dummy-hash-32", "texts_encoded"] == 3.0
+    # perf metrics must not leak into the quality table
+    assert "retrieval:retrieval/texts_encoded" not in results.to_dataframe().columns
+
+
+def test_cached_model_skips_cost_on_hit(tmp_path):
+    model = eb.CachedModel(eb.DummyModel(dim=16), cache_dir=str(tmp_path / "c"))
+    texts = ["one fish", "two fish"]
+
+    model.stats.reset()
+    model.encode(texts)
+    assert model.stats.n_encoded == 2  # first pass: everything is a miss
+
+    model.stats.reset()
+    model.encode(texts)
+    assert model.stats.n_encoded == 0  # second pass: all cache hits, no cost
+    assert model.stats.n_texts == 2  # but still requested
+
+
+def test_load_env_parses_file_without_override(tmp_path, monkeypatch):
+    env = tmp_path / ".env"
+    env.write_text(
+        "# a comment\n"
+        "export OPENAI_API_KEY='sk-test-123'\n"
+        'COHERE_API_KEY="co-456"\n'
+        "EMPTY_LINE_BELOW=\n"
+        "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("COHERE_API_KEY", "already-set")
+
+    applied = eb.load_env(str(env))
+
+    assert os.environ["OPENAI_API_KEY"] == "sk-test-123"  # quotes stripped
+    assert os.environ["COHERE_API_KEY"] == "already-set"  # existing var wins
+    assert "OPENAI_API_KEY" in applied and "COHERE_API_KEY" not in applied
+
+
+def test_load_env_missing_file_is_noop(tmp_path):
+    assert eb.load_env(str(tmp_path / "nope.env")) == {}
+
+
+def test_new_model_adapters_are_exported():
+    # Names resolve via lazy import; constructing without the optional dep
+    # must raise a clear, install-pointing ImportError (not AttributeError).
+    for cls_name in ("GoogleModel", "HuggingFaceModel"):
+        cls = getattr(eb, cls_name)
+        assert issubclass(cls, eb.BaseEmbeddingModel)
+
+
+def test_std_metrics_present_but_hidden_by_default():
+    texts = ["money bank finance", "goal team match sport"] * 5
+    labels = ["fin", "sport"] * 5
+    clf = eb.ClassificationDataset(texts, labels)
+    results = eb.Benchmark(
+        [eb.DummyModel(dim=64)], tasks=[eb.ClassificationTask(clf)]
+    ).run(verbose=False)
+
+    # std rows exist
+    assert any(r["metric"] == "accuracy_std" for r in results.rows)
+    # but are hidden from the default quality table
+    cols = results.to_dataframe().columns
+    assert not any(c.endswith("_std") for c in cols)
+    assert any(c.endswith("_std") for c in results.to_dataframe(include_std=True).columns)
+    # the mean ± std table renders the spread
+    assert "±" in results.to_table(std=True)
+
+
+def test_cli_run_offline(tmp_path):
+    import csv
+    import json
+
+    from embench.cli import main
+
+    retrieval = tmp_path / "r.json"
+    retrieval.write_text(
+        json.dumps(
+            {
+                "queries": {"q1": "alpha beta"},
+                "corpus": {"d1": "alpha beta", "d2": "gamma delta"},
+                "qrels": {"q1": {"d1": 1}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    labeled = tmp_path / "c.csv"
+    with open(labeled, "w", encoding="utf-8", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["text", "label"])
+        for t, lab in [("money bank", "fin"), ("goal team", "sport")] * 4:
+            w.writerow([t, lab])
+
+    out = tmp_path / "out.csv"
+    code = main(
+        [
+            "run", "-m", "dummy:64",
+            "--retrieval", str(retrieval),
+            "--classification", str(labeled),
+            "-k", "1,2",
+            "-o", str(out),
+            "--no-cache", "--quiet",
+        ]
+    )
+    assert code == 0
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_cli_no_command_returns_nonzero(capsys):
+    from embench.cli import main
+
+    assert main([]) == 1  # prints help, signals "nothing ran"
 
 
 def test_dataset_validation_rejects_bad_qrels():

@@ -82,4 +82,10 @@ class RetrievalTask(Task):
                 else:
                     scores[f"map@{k}"].append(0.0)
 
-        return {m: float(np.mean(v)) for m, v in scores.items()}
+        # mean per metric, plus the std across queries (spread = how much
+        # the metric varies query-to-query; hidden from the default table)
+        out = {}
+        for m, v in scores.items():
+            out[m] = float(np.mean(v))
+            out[f"{m}_std"] = float(np.std(v))
+        return out

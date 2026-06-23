@@ -35,8 +35,11 @@ bench = eb.Benchmark(
 
 results = bench.run()
 
-print("\n=== Comparison table ===")
+print("\n=== Comparison table (quality) ===")
 print(results.to_table())
+
+print("\n=== Performance (speed / cost) ===")
+print(results.performance())
 
 print("\nBest on retrieval (ndcg@5):", results.best_model("ndcg@5"))
 print("Best on classification (accuracy):", results.best_model("accuracy"))

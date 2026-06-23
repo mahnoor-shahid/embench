@@ -62,7 +62,11 @@ class ClassificationTask(Task):
             cv=cv,
             scoring=("accuracy", "f1_macro"),
         )
+        # Report the std across folds too, so callers can tell whether a
+        # difference between models is real or within noise.
         return {
             "accuracy": float(res["test_accuracy"].mean()),
+            "accuracy_std": float(res["test_accuracy"].std()),
             "f1_macro": float(res["test_f1_macro"].mean()),
+            "f1_macro_std": float(res["test_f1_macro"].std()),
         }

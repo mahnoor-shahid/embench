@@ -34,6 +34,8 @@ pip install embench[local]       # + sentence-transformers (local/HF models)
 pip install embench[openai]      # + OpenAI
 pip install embench[cohere]      # + Cohere
 pip install embench[voyage]      # + Voyage AI
+pip install embench[google]      # + Google (Gemini embeddings)
+pip install embench[huggingface] # + Hugging Face Inference API
 pip install embench[all]         # everything
 ```
 
@@ -83,15 +85,52 @@ stored on disk.
 model = eb.CachedModel(eb.OpenAIModel("text-embedding-3-small"))
 ```
 
+## API keys
+
+Hosted backends read their key from the environment
+(`OPENAI_API_KEY`, `COHERE_API_KEY`, `VOYAGE_API_KEY`, `GOOGLE_API_KEY`,
+`HUGGINGFACE_API_KEY`). Copy `.env.example` to `.env`, fill it in, and load it:
+
+```python
+import embench as eb
+eb.load_env()            # reads .env into the environment (no-op if absent)
+
+models = [eb.GoogleModel(), eb.HuggingFaceModel("sentence-transformers/all-MiniLM-L6-v2")]
+```
+
+`load_env()` uses `python-dotenv` if installed and otherwise a small built-in
+parser, so it works with just the core install.
+
 ## Reading results
 
 ```python
-results.to_table()                       # pretty comparison string
-results.to_dataframe()                    # wide: models x metrics
+results.to_table()                       # pretty comparison string (quality only)
+results.to_table(std=True)               # cells as "mean ± std"
+results.to_dataframe()                    # wide: models x quality metrics
+results.performance()                     # wide: models x speed/cost metrics
 results.best_model("ndcg@10")            # single best model for a metric
 results.ranking("accuracy")              # all models ranked
 results.to_csv("out.csv")                # export
 ```
+
+Each metric also carries a spread (`accuracy_std` over CV folds, retrieval
+metric std over queries). It's hidden from the default table — use
+`to_table(std=True)` (or the CLI `--std` flag) to see whether one model
+*really* beats another or the gap is within noise.
+
+### Speed and cost
+
+Every run also records how long each model spent encoding and how many texts
+it actually encoded (cache hits don't count, so this tracks real API cost).
+These are kept out of the quality table and exposed separately:
+
+```python
+results.performance()          # encode_seconds, texts_encoded, texts_per_sec per model
+results.ranking("texts_per_sec")  # fastest model first
+results.to_dataframe(include_perf=True)  # quality + perf in one table
+```
+
+Choosing a model is a quality/speed/cost trade-off — `embench` shows all three.
 
 ## Extending it
 
@@ -108,14 +147,64 @@ class MyModel(eb.BaseEmbeddingModel):
 implement `evaluate(self, model) -> dict[str, float]`. The runner and
 reporting need no changes — that is the whole design.
 
+## Command line
+
+Run a benchmark from the shell — no Python needed. Models are
+`backend:model_id` specs (repeat `-m`); tasks are file paths. A local `.env`
+is loaded automatically, so API keys are picked up.
+
+```bash
+embench run \
+  -m dummy:256 \
+  -m openai:text-embedding-3-small \
+  -m local:all-MiniLM-L6-v2 \
+  --retrieval my_data.json \
+  --classification labeled.csv \
+  -k 1,5,10 \
+  -o results.csv
+```
+
+Backends: `dummy`, `openai`, `cohere`, `voyage`, `google`, `hf:<id>` (Inference
+API), `local:<id>` (sentence-transformers). Caching is on by default
+(`--no-cache` to disable); add `--perf` to fold speed/cost into the table.
+See `embench run -h` for all options.
+
 ## Try it without any keys
 
 ```bash
+embench run -m dummy:128 -m dummy:512 \
+  --retrieval sample_data/retrieval.json \
+  --classification sample_data/labeled.csv \
+  --clustering sample_data/labeled.csv
+# or the scripted equivalent:
 python examples/quickstart.py
 ```
 
 Uses a dependency-free `DummyModel` (a hashing-trick embedder) so the whole
 pipeline runs offline. Use it as a baseline and a sanity check.
+
+## Development
+
+After cloning, set up an isolated environment in one command:
+
+```bash
+# Windows (PowerShell)
+./setup.ps1                 # core + dev; or: ./setup.ps1 all  /  ./setup.ps1 openai,google
+
+# macOS / Linux
+./setup.sh                  # core + dev; or: ./setup.sh all   /  ./setup.sh openai,google
+```
+
+This creates a local `.venv`, installs `embench` (editable) with the chosen
+extras, and seeds a `.env` from `.env.example` for your API keys. Then:
+
+```bash
+# activate: .venv\Scripts\Activate.ps1   (Windows)  |  source .venv/bin/activate  (Unix)
+pytest                      # run the test suite
+```
+
+`.venv`, `.env`, and the embedding cache are git-ignored; never commit them.
+Do commit `.env.example`.
 
 ## License
 

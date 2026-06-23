@@ -29,6 +29,7 @@ class Benchmark:
                 label = f"{model.name} | {task.task_type}:{task.name}"
                 if verbose:
                     print(f"Running {label} ...")
+                model.stats.reset()
                 start = time.perf_counter()
                 try:
                     metrics = task.evaluate(model)
@@ -40,6 +41,18 @@ class Benchmark:
                         traceback.print_exc()
                     continue
                 elapsed = time.perf_counter() - start
+
+                # Quality metrics from the task, then performance metrics
+                # captured by the model during encoding. Performance rows are
+                # tagged so reporting can keep the quality table clean.
+                s = model.stats
+                metrics = {
+                    **metrics,
+                    "eval_seconds": elapsed,
+                    "encode_seconds": s.seconds,
+                    "texts_encoded": float(s.n_encoded),
+                    "texts_per_sec": s.texts_per_sec,
+                }
                 for metric, value in metrics.items():
                     rows.append(
                         {
@@ -51,5 +64,8 @@ class Benchmark:
                         }
                     )
                 if verbose:
-                    print(f"  done in {elapsed:.2f}s")
+                    print(
+                        f"  done in {elapsed:.2f}s "
+                        f"(encoded {s.n_encoded} texts in {s.seconds:.2f}s)"
+                    )
         return BenchmarkResults(rows)

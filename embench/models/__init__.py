@@ -18,7 +18,7 @@ def __getattr__(name):  # PEP 562 lazy attribute access
         from .openai import OpenAIModel
 
         return OpenAIModel
-    if name in ("CohereModel", "VoyageModel"):
+    if name in ("CohereModel", "VoyageModel", "GoogleModel", "HuggingFaceModel"):
         from . import api_models
 
         return getattr(api_models, name)
@@ -33,4 +33,6 @@ __all__ = [
     "OpenAIModel",
     "CohereModel",
     "VoyageModel",
+    "GoogleModel",
+    "HuggingFaceModel",
 ]

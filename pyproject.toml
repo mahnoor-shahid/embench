@@ -9,7 +9,7 @@ description = "Benchmark embedding models on your own data — choose the right 
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
-authors = [{ name = "Mahnoor" }]
+authors = [{ name = "Mahnoor Shahid", email = "mahnoor_shahid_shakir@outlook.com" }]
 keywords = ["embeddings", "benchmark", "retrieval", "rag", "mteb", "nlp"]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -30,18 +30,27 @@ local = ["sentence-transformers>=2.2"]
 openai = ["openai>=1.0"]
 cohere = ["cohere>=5.0"]
 voyage = ["voyageai>=0.2"]
+google = ["google-genai>=1.0"]
+huggingface = ["huggingface-hub>=0.20"]
+dotenv = ["python-dotenv>=1.0"]  # optional; load_env() also works without it
 # convenience: install every backend
 all = [
     "sentence-transformers>=2.2",
     "openai>=1.0",
     "cohere>=5.0",
     "voyageai>=0.2",
+    "google-genai>=1.0",
+    "huggingface-hub>=0.20",
 ]
 dev = ["pytest>=7.0"]
 
+[project.scripts]
+embench = "embench.cli:main"
+
 [project.urls]
-Homepage = "https://github.com/yourname/embench"
-Issues = "https://github.com/yourname/embench/issues"
+Homepage = "https://github.com/mahnoor-shahid/embench"
+Repository = "https://github.com/mahnoor-shahid/embench"
+Issues = "https://github.com/mahnoor-shahid/embench/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["embench"]

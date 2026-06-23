@@ -11,6 +11,7 @@ per model.
 from __future__ import annotations
 
 import os
+import time
 
 import numpy as np
 
@@ -43,13 +44,20 @@ class CachedModel(BaseEmbeddingModel):
 
     def encode(self, texts, batch_size: int = 32, show_progress: bool = False):
         texts = list(texts)
+        # Count every requested text, but only the cache misses below count
+        # as actually encoded -- so stats reflect the real (cached) cost.
+        self.stats.n_texts += len(texts)
         keys = [text_hash(t, salt=self.model.name) for t in texts]
         missing = [t for t, k in zip(texts, keys) if k not in self._store]
 
         if missing:
+            t0 = time.perf_counter()
             fresh = self.model.encode(
                 missing, batch_size=batch_size, show_progress=show_progress
             )
+            self.stats.seconds += time.perf_counter() - t0
+            self.stats.n_encoded += len(missing)
+            self.stats.n_chars += sum(len(t) for t in missing)
             for t, vec in zip(missing, fresh):
                 self._store[text_hash(t, salt=self.model.name)] = vec
             self._save()
