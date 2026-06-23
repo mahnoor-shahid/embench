@@ -5,9 +5,9 @@ Quickstart:
     import embench as eb
 
     models = [
-        eb.DummyModel(dim=256),                          # baseline, no deps
-        eb.SentenceTransformerModel("all-MiniLM-L6-v2"), # pip install embench[local]
-        eb.OpenAIModel("text-embedding-3-small"),        # pip install embench[openai]
+        eb.DummyModel(dim=256),                          # baseline, no keys
+        eb.SentenceTransformerModel("all-MiniLM-L6-v2"), # local, pip install embench[local]
+        eb.OpenAIModel("text-embedding-3-small"),        # needs OPENAI_API_KEY
     ]
     # Wrap in a cache so re-runs don't re-pay:
     models = [eb.CachedModel(m) for m in models]

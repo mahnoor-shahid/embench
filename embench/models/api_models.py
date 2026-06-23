@@ -5,13 +5,9 @@ Cohere and Voyage distinguish *query* vs *document* embeddings via an
 default, which is the conventional choice for corpus-side comparison;
 override ``input_type`` if you want query-side embeddings.
 
-    pip install embench[cohere]       # CohereModel
-    pip install embench[voyage]       # VoyageModel
-    pip install embench[google]       # GoogleModel
-    pip install embench[huggingface]  # HuggingFaceModel
-
-API keys are read from the environment (see ``.env.example``); call
-``embench.load_env()`` first if you keep them in a ``.env`` file.
+All SDKs these adapters need ship with ``embench`` itself. API keys are read
+from the environment (see ``.env.example``); call ``embench.load_env()``
+first if you keep them in a ``.env`` file.
 """
 from __future__ import annotations
 
@@ -36,8 +32,8 @@ class CohereModel(BaseEmbeddingModel):
             import cohere
         except ImportError as exc:  # pragma: no cover
             raise ImportError(
-                "cohere is required for CohereModel. "
-                "Install it with: pip install embench[cohere]"
+                "cohere is required for CohereModel. It ships with embench, "
+                "so reinstall it with: pip install embench"
             ) from exc
         self._client = cohere.Client()
 
@@ -62,8 +58,8 @@ class VoyageModel(BaseEmbeddingModel):
             import voyageai
         except ImportError as exc:  # pragma: no cover
             raise ImportError(
-                "voyageai is required for VoyageModel. "
-                "Install it with: pip install embench[voyage]"
+                "voyageai is required for VoyageModel. It ships with embench, "
+                "so reinstall it with: pip install embench"
             ) from exc
         self._client = voyageai.Client()
 
@@ -73,7 +69,7 @@ class VoyageModel(BaseEmbeddingModel):
 
 
 class GoogleModel(BaseEmbeddingModel):
-    """Gemini embeddings via the Google GenAI SDK.  ``pip install embench[google]``
+    """Gemini embeddings via the Google GenAI SDK.
 
     Reads the API key from ``GOOGLE_API_KEY`` (or ``GEMINI_API_KEY``). The
     default ``gemini-embedding-001`` returns one vector per input; avoid
@@ -87,8 +83,8 @@ class GoogleModel(BaseEmbeddingModel):
             from google import genai
         except ImportError as exc:  # pragma: no cover
             raise ImportError(
-                "google-genai is required for GoogleModel. "
-                "Install it with: pip install embench[google]"
+                "google-genai is required for GoogleModel. It ships with "
+                "embench, so reinstall it with: pip install embench"
             ) from exc
         api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
         self._client = genai.Client(api_key=api_key) if api_key else genai.Client()
@@ -101,11 +97,9 @@ class GoogleModel(BaseEmbeddingModel):
 class HuggingFaceModel(BaseEmbeddingModel):
     """Embeddings via the Hugging Face Inference API.
 
-    ``pip install embench[huggingface]``
-
     Reads the token from ``HUGGINGFACE_API_KEY`` (or ``HF_TOKEN``). For
     *local* models with no API call, use ``SentenceTransformerModel``
-    instead (``embench[local]``). The Inference API embeds one text per
+    instead. The Inference API embeds one text per
     call, so this loops over the batch; if a model returns token-level
     vectors they are mean-pooled into a single sentence embedding.
     """
@@ -122,8 +116,8 @@ class HuggingFaceModel(BaseEmbeddingModel):
             from huggingface_hub import InferenceClient
         except ImportError as exc:  # pragma: no cover
             raise ImportError(
-                "huggingface_hub is required for HuggingFaceModel. "
-                "Install it with: pip install embench[huggingface]"
+                "huggingface_hub is required for HuggingFaceModel. It ships "
+                "with embench, so reinstall it with: pip install embench"
             ) from exc
         token = os.environ.get("HUGGINGFACE_API_KEY") or os.environ.get("HF_TOKEN")
         self._client = InferenceClient(model=model_id, token=token, provider=provider)

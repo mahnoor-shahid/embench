@@ -1,4 +1,4 @@
-"""OpenAI embeddings.  ``pip install embench[openai]``
+"""OpenAI embeddings.
 
 Reads the API key from the ``OPENAI_API_KEY`` environment variable.
 """
@@ -17,8 +17,8 @@ class OpenAIModel(BaseEmbeddingModel):
             from openai import OpenAI
         except ImportError as exc:  # pragma: no cover
             raise ImportError(
-                "openai is required for OpenAIModel. "
-                "Install it with: pip install embench[openai]"
+                "openai is required for OpenAIModel. It ships with embench, "
+                "so reinstall it with: pip install embench"
             ) from exc
         self._client = OpenAI()
 

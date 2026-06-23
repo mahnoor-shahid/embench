@@ -1,5 +1,15 @@
 # embench
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python](https://img.shields.io/badge/Python-3.8%2B-green)](https://www.python.org/)
+[![NumPy](https://img.shields.io/badge/NumPy-1.21%2B-blue)](https://numpy.org/)
+[![Pandas](https://img.shields.io/badge/Pandas-1.3%2B-blue)](https://pandas.pydata.org/)
+[![Matplotlib](https://img.shields.io/badge/Matplotlib-3.4%2B-purple)](https://matplotlib.org/)
+[![scikit-learn](https://img.shields.io/badge/scikit--learn-0.24%2B-red)](https://scikit-learn.org/)
+[![tqdm](https://img.shields.io/badge/tqdm-4.62%2B-pink)](https://tqdm.github.io/)
+[![PyYAML](https://img.shields.io/badge/PyYAML-5.4%2B-orange)](https://pyyaml.org/)
+
+
 **Benchmark embedding models on _your own_ data.**
 
 MTEB and friends rank models on public, generic datasets. The model at the
@@ -29,18 +39,14 @@ print("Winner:", results.best_model("ndcg@10"))
 ## Install
 
 ```bash
-pip install embench              # core: dummy model + all tasks
-pip install embench[local]       # + sentence-transformers (local/HF models)
-pip install embench[openai]      # + OpenAI
-pip install embench[cohere]      # + Cohere
-pip install embench[voyage]      # + Voyage AI
-pip install embench[google]      # + Google (Gemini embeddings)
-pip install embench[huggingface] # + Hugging Face Inference API
-pip install embench[all]         # everything
+pip install embench              # core + all API backends (OpenAI, Cohere, Voyage, Google, HF)
+pip install embench[local]       # + local models via sentence-transformers (pulls in PyTorch)
+pip install embench[all]         # everything, including the local backend
 ```
 
-Core install pulls only numpy, scikit-learn, and pandas. Every model backend
-is an optional extra, so you only install what you use.
+The base install is light and runs every **API** backend out of the box. The
+only heavyweight is `sentence-transformers` (it pulls in PyTorch), so local
+models are an opt-in extra — add `[local]` (or `[all]`) when you want them.
 
 ## Tasks
 
@@ -189,23 +195,38 @@ After cloning, set up an isolated environment in one command:
 
 ```bash
 # Windows (PowerShell)
-./setup.ps1                 # core + dev; or: ./setup.ps1 all  /  ./setup.ps1 openai,google
+./setup.ps1
 
 # macOS / Linux
-./setup.sh                  # core + dev; or: ./setup.sh all   /  ./setup.sh openai,google
+./setup.sh
 ```
 
-This creates a local `.venv`, installs `embench` (editable) with the chosen
-extras, and seeds a `.env` from `.env.example` for your API keys. Then:
+This creates a local `.venv`, installs `embench` (editable, with the API
+backends + dev tools), and seeds a `.env` from `.env.example` for your API
+keys. Then:
 
 ```bash
 # activate: .venv\Scripts\Activate.ps1   (Windows)  |  source .venv/bin/activate  (Unix)
 pytest                      # run the test suite
 ```
 
+To also work on the local backend (PyTorch), add it after setup:
+`pip install -e ".[all]"`.
+
 `.venv`, `.env`, and the embedding cache are git-ignored; never commit them.
 Do commit `.env.example`.
 
 ## License
 
-MIT
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 
+```
+MIT License - Feel free to use, modify, and distribute
+Academic use encouraged - Please cite our work
+Commercial use welcome - Attribution appreciated
+```
+
+## Support
+
+For questions, suggestions, or collaboration opportunities, feel free to reach out. 
+
+

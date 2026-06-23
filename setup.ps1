@@ -1,13 +1,9 @@
 # One-command dev setup for Windows (PowerShell).
-#   ./setup.ps1            # core + dev (pytest)
-#   ./setup.ps1 all        # every model backend too
-#   ./setup.ps1 openai,google
+#   ./setup.ps1
 #
-# Creates a local .venv, installs embench editable with the chosen extras,
-# and seeds a .env from .env.example if you don't have one yet.
-param(
-    [string]$Extras = "dev"
-)
+# Creates a local .venv, installs embench editable (API backends + dev tools),
+# and seeds a .env from .env.example if you don't have one yet. To also work on
+# the local backend (PyTorch), run afterwards:  pip install -e ".[all]"
 $ErrorActionPreference = "Stop"
 
 $python = if ($env:PYTHON) { $env:PYTHON } else { "python" }
@@ -18,12 +14,8 @@ Write-Host "Creating virtual environment in .venv ..."
 $venvPy = Join-Path ".venv" "Scripts\python.exe"
 & $venvPy -m pip install --upgrade pip
 
-# always include dev so tests run; merge with any user-requested extras
-$wanted = ($Extras -split ",") | ForEach-Object { $_.Trim() } | Where-Object { $_ }
-if ($wanted -notcontains "dev") { $wanted += "dev" }
-$spec = "-e", ".[$([string]::Join(",", $wanted))]"
-Write-Host "Installing embench [$($wanted -join ', ')] ..."
-& $venvPy -m pip install @spec
+Write-Host "Installing embench (core + API backends + dev tools) ..."
+& $venvPy -m pip install -e ".[dev]"
 
 if (-not (Test-Path ".env")) {
     Copy-Item ".env.example" ".env"
