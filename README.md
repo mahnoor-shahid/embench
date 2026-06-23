@@ -1,13 +1,11 @@
 # embench
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python](https://img.shields.io/badge/Python-3.8%2B-green)](https://www.python.org/)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue)](https://github.com/mahnoor-shahid/embench)
+[![Python](https://img.shields.io/badge/Python-3.9%2B-green)](https://www.python.org/)
 [![NumPy](https://img.shields.io/badge/NumPy-1.21%2B-blue)](https://numpy.org/)
 [![Pandas](https://img.shields.io/badge/Pandas-1.3%2B-blue)](https://pandas.pydata.org/)
-[![Matplotlib](https://img.shields.io/badge/Matplotlib-3.4%2B-purple)](https://matplotlib.org/)
-[![scikit-learn](https://img.shields.io/badge/scikit--learn-0.24%2B-red)](https://scikit-learn.org/)
-[![tqdm](https://img.shields.io/badge/tqdm-4.62%2B-pink)](https://tqdm.github.io/)
-[![PyYAML](https://img.shields.io/badge/PyYAML-5.4%2B-orange)](https://pyyaml.org/)
+[![scikit-learn](https://img.shields.io/badge/scikit--learn-1.0%2B-red)](https://scikit-learn.org/)
 
 
 **Benchmark embedding models on _your own_ data.**
