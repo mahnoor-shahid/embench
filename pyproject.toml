@@ -17,10 +17,11 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
-# Base install: the core pipeline plus every *lightweight* API backend, so
-# `pip install embench` runs OpenAI/Cohere/Voyage/Google/Hugging Face out of
-# the box. The one heavyweight backend (sentence-transformers, which pulls in
-# PyTorch) is opt-in via the `local` / `all` extras below.
+# Base install: the core pipeline, every *lightweight* API backend, and the
+# document-ingestion stack — so `pip install embench` runs OpenAI/Cohere/Voyage/
+# Google/Hugging Face *and* extracts/chunks PDFs out of the box. The one
+# heavyweight embedding backend (sentence-transformers, which pulls in PyTorch)
+# is opt-in via the `local` / `all` extras below.
 dependencies = [
     "numpy>=1.21",
     "scikit-learn>=1.0",
@@ -31,10 +32,14 @@ dependencies = [
     "voyageai>=0.2",
     "google-genai>=1.0",
     "huggingface-hub>=0.20",
+    # document ingestion: PDFs -> corpus. docling (OCR/layout) + pymupdf (fast)
+    "docling>=2.0",
+    "pymupdf>=1.23",
 ]
 
 [project.optional-dependencies]
-# local models via sentence-transformers (pulls in PyTorch — large)
+# local models via sentence-transformers (pulls in PyTorch — large).
+# Ingestion (docling/pymupdf) ships in the base install, so it has no extra.
 local = ["sentence-transformers>=2.2"]
 # everything, including the heavy local backend
 all = ["sentence-transformers>=2.2"]

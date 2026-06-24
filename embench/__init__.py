@@ -50,6 +50,17 @@ def __getattr__(name):
         from . import models
 
         return getattr(models, name)
+    if name in (
+        "pdf_to_corpus",
+        "save_corpus",
+        "save_dataset",
+        "extract_text",
+        "chunk_text",
+        "generate_queries",
+    ):
+        from . import ingest
+
+        return getattr(ingest, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -78,4 +89,11 @@ __all__ = [
     # runner + results
     "Benchmark",
     "BenchmarkResults",
+    # ingestion (PDFs -> corpus -> dataset; ships in the base install)
+    "extract_text",
+    "chunk_text",
+    "pdf_to_corpus",
+    "generate_queries",
+    "save_corpus",
+    "save_dataset",
 ]

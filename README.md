@@ -14,7 +14,7 @@ MTEB and friends rank models on public, generic datasets. The model at the
 top of the leaderboard is often *not* the best one for your domain — your
 legal contracts, your support tickets, your medical notes, your code. `embench`
 lets you point a handful of candidate models (local or proprietary) at your own
-labeled data and see which one actually wins for *your* task.
+labeled data and see which one actually wins for *your* task, how confidently, and at what speed/cost.
 
 ```python
 import embench as eb
@@ -37,14 +37,15 @@ print("Winner:", results.best_model("ndcg@10"))
 ## Install
 
 ```bash
-pip install embench              # core + all API backends (OpenAI, Cohere, Voyage, Google, HF)
+pip install embench              # core + all API backends + PDF ingestion (docling/pymupdf)
 pip install embench[local]       # + local models via sentence-transformers (pulls in PyTorch)
 pip install embench[all]         # everything, including the local backend
 ```
 
-The base install is light and runs every **API** backend out of the box. The
-only heavyweight is `sentence-transformers` (it pulls in PyTorch), so local
-models are an opt-in extra — add `[local]` (or `[all]`) when you want them.
+The base install runs every **API** backend and the **PDF ingestion** pipeline
+out of the box. The only heavyweight left out is `sentence-transformers` (it
+pulls in PyTorch), so local models are an opt-in extra — add `[local]` (or
+`[all]`) when you want them.
 
 ## Tasks
 
@@ -78,6 +79,63 @@ the team won the championship,sports
 ```python
 eb.ClassificationDataset.from_csv("data.csv", text_col="text", label_col="label")
 ```
+
+## Ingesting documents (PDFs)
+
+Don't have a clean JSON corpus yet? Turn a folder of PDFs into one. The pipeline
+is **staged** so each step persists its output and you never redo expensive work:
+
+```
+data/
+  documents/          # your PDFs (input)
+  extracted_text/     # stage 1 → one .md per document
+  corpus.json         # stage 2 → {chunk_id: text}
+  dataset.json        # stage 3 → + queries + qrels (ready to benchmark)
+```
+
+```bash
+# ingestion ships in the base install — nothing extra to add
+embench ingest extract data/documents/ -o data/extracted_text/        # stage 1
+embench ingest chunk   data/extracted_text/ -o data/corpus.json       # stage 2
+# …or both at once:
+embench ingest run     data/documents/ -o data/corpus.json
+
+# stage 3 — synthesise queries + qrels with an LLM, yielding a full dataset:
+embench ingest queries data/corpus.json -o data/dataset.json --method openai
+# now it's benchmarkable directly:
+embench run -m dummy:256 --retrieval data/dataset.json
+```
+
+**Each stage has swappable options:**
+
+| Stage | Option | Notes |
+|------|--------|-------|
+| extract | `--method docling` *(default)* | layout/table aware, **OCR for scanned pages** ([IBM Docling](https://github.com/docling-project/docling)) |
+| extract | `--method pymupdf` | fast, born-digital PDFs only (no OCR) |
+| extract | `--method granite` | IBM **Granite-Docling VLM** — reads page images, best on complex/messy layouts |
+| chunk | `--method recursive` *(default)* | packs paragraphs/sections up to `--max-chars` |
+| chunk | `--method sentence` | never cuts mid-sentence |
+| chunk | `--method fixed` | uniform sliding window with `--overlap` |
+| queries | `--method openai` *(default)* | Chat Completions (`OPENAI_API_KEY`), default `gpt-4o-mini` |
+| queries | `--method google` | Gemini (`GOOGLE_API_KEY`), default `gemini-2.5-flash` |
+| queries | `--n-queries N` / `--max-chunks N` | questions per chunk / cap chunks for cost |
+
+In Python the stages are plain functions — extract once, then re-chunk freely,
+and synthesise the supervision with whichever model (or your own callable):
+
+```python
+from embench.ingest import extract_text, chunk_text, generate_queries
+docs    = extract_text("data/documents/", method="docling", out_dir="data/extracted_text/")
+corpus  = chunk_text(docs, method="recursive", max_chars=1000, out_path="data/corpus.json")
+dataset = generate_queries(corpus, method="openai", n_queries=1, out_path="data/dataset.json")
+```
+
+Stages 1–2 produce the **corpus** half of a retrieval dataset; **stage 3** adds
+the supervision a benchmark needs — `queries` and relevance judgements (`qrels`),
+synthesised by asking an LLM for the questions each chunk answers. The result
+loads straight into `RetrievalDataset.from_json` and scores. (Pass your own
+`generator=callable(text, n) -> list[str]` to `generate_queries` to plug in any
+model or run offline.)
 
 ## Caching
 
@@ -113,7 +171,8 @@ results.to_table(std=True)               # cells as "mean ± std"
 results.to_dataframe()                    # wide: models x quality metrics
 results.performance()                     # wide: models x speed/cost metrics
 results.best_model("ndcg@10")            # single best model for a metric
-results.ranking("accuracy")              # all models ranked
+results.ranking("accuracy")              # all models ranked by one metric
+results.aggregate_ranking()              # one overall score: mean across quality metrics
 results.to_csv("out.csv")                # export
 ```
 
@@ -121,6 +180,22 @@ Each metric also carries a spread (`accuracy_std` over CV folds, retrieval
 metric std over queries). It's hidden from the default table — use
 `to_table(std=True)` (or the CLI `--std` flag) to see whether one model
 *really* beats another or the gap is within noise.
+
+### Is the difference real? (significance testing)
+
+A higher number isn't always a real win — it can be noise on your particular
+queries. embench answers this directly with a **paired randomization (Fisher)
+test** on the per-query scores, the same idea ranx uses, but with no extra
+dependency:
+
+```python
+results.significance("ndcg@10")   # tidy table: every model pair, delta, p-value, significant?
+results.win_tie_loss("ndcg@10")   # per-model record: wins / ties / losses (p < 0.05)
+```
+
+A *win* is a higher mean that clears `p < max_p`; anything within noise is a
+*tie*. This needs per-query data, so it applies to retrieval metrics. From the
+CLI: `embench run ... --significance ndcg@10 --rank`.
 
 ### Speed and cost
 

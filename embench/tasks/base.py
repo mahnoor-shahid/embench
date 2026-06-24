@@ -33,5 +33,18 @@ class Task(ABC):
         """Run the task for one model and return ``{metric_name: value}``."""
         raise NotImplementedError
 
+    def evaluate_detailed(
+        self, model: BaseEmbeddingModel
+    ) -> tuple[dict[str, float], dict[str, list]]:
+        """Like :meth:`evaluate`, but also return per-sample metric values.
+
+        Returns ``(metrics, samples)`` where ``samples`` maps a metric name to
+        its per-sample (e.g. per-query) values -- the raw input a significance
+        test needs to tell real differences from noise. Tasks that have no
+        meaningful per-sample breakdown return an empty ``samples`` dict; the
+        runner calls this and keeps whatever samples it gets.
+        """
+        return self.evaluate(model), {}
+
     def __repr__(self) -> str:  # pragma: no cover - cosmetic
         return f"{type(self).__name__}(name={self.name!r})"

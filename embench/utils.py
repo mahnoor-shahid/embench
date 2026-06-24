@@ -73,3 +73,39 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 def text_hash(text: str, salt: str = "") -> str:
     """Stable hash of a string, used for caching keys and the dummy model."""
     return hashlib.sha256((salt + "\x00" + text).encode("utf-8")).hexdigest()
+
+
+def paired_permutation_test(
+    a, b, n_permutations: int = 10000, seed: int = 0
+) -> float:
+    """Two-sided paired randomization (Fisher) test on per-query metric values.
+
+    ``a`` and ``b`` are aligned arrays -- one score per query, for two models on
+    the *same* queries. Under the null (the two models are interchangeable) the
+    sign of each per-query difference is equally likely to flip, so we randomly
+    flip signs many times and ask how often the resampled mean difference is at
+    least as extreme as the observed one. Returns a p-value in ``(0, 1]``.
+
+    This mirrors the significance test ranx uses to decide whether one model
+    *really* beats another on your data, but needs no extra dependency.
+    """
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    if a.shape != b.shape or a.ndim != 1:
+        raise ValueError("a and b must be 1-D arrays of the same length")
+    diff = a - b
+    n = diff.size
+    if n == 0:
+        return 1.0
+    observed = abs(float(diff.mean()))
+    if observed == 0.0:
+        return 1.0
+
+    rng = np.random.default_rng(seed)
+    # Random +/-1 sign flips per query, vectorised over all permutations.
+    signs = rng.choice((-1.0, 1.0), size=(n_permutations, n))
+    resampled = np.abs((signs * diff).mean(axis=1))
+    # +1 in numerator and denominator counts the observed arrangement itself,
+    # giving an unbiased, never-zero p-value.
+    count = int(np.count_nonzero(resampled >= observed - 1e-12))
+    return (count + 1) / (n_permutations + 1)

@@ -191,6 +191,245 @@ def test_cli_no_command_returns_nonzero(capsys):
     assert main([]) == 1  # prints help, signals "nothing ran"
 
 
+def test_ingest_collects_and_ids_documents(tmp_path):
+    from embench.ingest.common import chunk_id_for, collect_paths, doc_id_for
+
+    (tmp_path / "a.pdf").write_bytes(b"%PDF-1.4")
+    (tmp_path / "notes.txt").write_text("ignore me", encoding="utf-8")
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    (sub / "b.pdf").write_bytes(b"%PDF-1.4")
+
+    recursive = collect_paths(str(tmp_path), (".pdf",), recursive=True)
+    assert len(recursive) == 2  # a.pdf + sub/b.pdf, not the .txt
+    flat = collect_paths(str(tmp_path), (".pdf",), recursive=False)
+    assert len(flat) == 1  # only top-level a.pdf
+
+    # ids are stable and disambiguate same-named files in different folders
+    assert doc_id_for("x/a.pdf") == doc_id_for("x/a.pdf")
+    assert doc_id_for("x/a.pdf") != doc_id_for("y/a.pdf")
+    assert chunk_id_for(doc_id_for("x/a.pdf"), 3).endswith("-0003")
+
+
+def test_chunk_text_strategies_and_roundtrip(tmp_path):
+    import json
+
+    # one short doc + one long doc (forces splitting)
+    docs = {
+        "doc-0000": "First para.\n\nSecond para.",
+        "doc-0001": "word. " * 400,  # ~2400 chars -> must split at max_chars
+    }
+    for method in ("recursive", "sentence", "fixed"):
+        corpus = eb.chunk_text(docs, method=method, max_chars=300, overlap=50)
+        assert corpus  # produced chunks
+        assert all(ids.startswith(("doc-0000", "doc-0001")) for ids in corpus)
+        assert all(len(v) <= 600 for v in corpus.values())  # roughly bounded
+
+    # persists corpus JSON in the retrieval-friendly shape
+    out = tmp_path / "corpus.json"
+    eb.chunk_text(docs, method="fixed", max_chars=300, out_path=str(out))
+    saved = json.loads(out.read_text(encoding="utf-8"))
+    assert "corpus" in saved and len(saved["corpus"]) > 0
+
+
+def test_extract_unknown_method_errors():
+    import pytest
+
+    with pytest.raises(ValueError, match="unknown extract method"):
+        eb.extract_text("whatever", method="nope")
+
+
+def test_extract_requires_backend_when_absent(tmp_path):
+    import importlib.util
+
+    import pytest
+
+    (tmp_path / "a.pdf").write_bytes(b"%PDF-1.4")
+    if importlib.util.find_spec("docling") is None:
+        with pytest.raises(ImportError, match="pip install embench"):
+            eb.extract_text(str(tmp_path), method="docling")
+
+
+def _make_pdf(path, lines):
+    """Build a tiny born-digital PDF with a real text layer (needs pymupdf)."""
+    import fitz
+
+    doc = fitz.open()
+    page = doc.new_page()
+    y = 72
+    for line in lines:
+        page.insert_text((72, y), line)
+        y += 28
+    doc.save(str(path))
+    doc.close()
+
+
+def test_extract_pymupdf_real_pdf(tmp_path):
+    import importlib.util
+
+    import pytest
+
+    if importlib.util.find_spec("fitz") is None:
+        pytest.skip("pymupdf not installed")
+
+    _make_pdf(
+        tmp_path / "faq.pdf",
+        ["Reset your password from the login page.", "We accept Visa and PayPal."],
+    )
+    docs = eb.extract_text(str(tmp_path), method="pymupdf", show_progress=False)
+    assert len(docs) == 1
+    text = next(iter(docs.values())).lower()
+    assert "password" in text and "paypal" in text
+
+    corpus = eb.chunk_text(docs, method="recursive", max_chars=40)
+    assert len(corpus) >= 2  # the two lines land in separate chunks
+
+
+def test_extract_docling_real_pdf(tmp_path):
+    import importlib.util
+
+    import pytest
+
+    if importlib.util.find_spec("docling") is None or importlib.util.find_spec("fitz") is None:
+        pytest.skip("docling/pymupdf not installed")
+
+    _make_pdf(tmp_path / "doc.pdf", ["Cancel your subscription in account settings."])
+    docs = eb.extract_text(str(tmp_path), method="docling", show_progress=False)
+    assert len(docs) == 1
+    assert "subscription" in next(iter(docs.values())).lower()
+
+
+def test_generate_queries_builds_benchmarkable_dataset(tmp_path):
+    import json
+
+    # Persist a corpus the way `ingest chunk` does, then load it back.
+    corpus = {"doc-0000": "alpha beta gamma", "doc-0001": "delta epsilon"}
+    corpus_path = tmp_path / "corpus.json"
+    eb.save_corpus(corpus, str(corpus_path))
+
+    # Offline generator: deterministic, no API key needed.
+    def fake_gen(text, n):
+        first = text.split()[0]
+        return [f"what is {first} #{i}?" for i in range(n)]
+
+    out = tmp_path / "dataset.json"
+    dataset = eb.generate_queries(
+        str(corpus_path),
+        generator=fake_gen,
+        n_queries=2,
+        out_path=str(out),
+        show_progress=False,
+    )
+
+    # 2 chunks x 2 queries each, every query judged against its source chunk.
+    assert len(dataset["queries"]) == 4
+    assert dataset["corpus"] == corpus
+    assert dataset["qrels"]["doc-0000-q0"] == {"doc-0000": 1}
+
+    # The written file loads as a real, valid RetrievalDataset and scores.
+    saved = json.loads(out.read_text(encoding="utf-8"))
+    assert {"queries", "corpus", "qrels"} <= set(saved)
+    ds = eb.RetrievalDataset.from_json(str(out))
+    scores = eb.RetrievalTask(ds, k_values=[1]).evaluate(eb.DummyModel(dim=64))
+    assert "recall@1" in scores
+
+
+def test_generate_queries_unknown_method_errors():
+    import pytest
+
+    with pytest.raises(ValueError, match="unknown query method"):
+        eb.generate_queries({"d0": "x"}, method="nope")
+
+
+def test_generate_queries_empty_corpus_errors():
+    import pytest
+
+    with pytest.raises(ValueError, match="empty corpus"):
+        eb.generate_queries({}, generator=lambda t, n: ["q"])
+
+
+def test_permutation_test_separates_signal_from_noise():
+    import numpy as np
+
+    from embench.utils import paired_permutation_test
+
+    rng = np.random.default_rng(0)
+    # a consistently beats b by a clear margin -> low p
+    a = rng.uniform(0.6, 0.9, size=200)
+    b = rng.uniform(0.1, 0.4, size=200)
+    assert paired_permutation_test(a, b) < 0.05
+    # identical vectors -> not distinguishable -> p == 1.0
+    assert paired_permutation_test(a, a) == 1.0
+
+
+def test_significance_and_win_tie_loss(tmp_path):
+    # Build a retrieval set with enough queries for a meaningful test. One model
+    # is a strong retriever (dummy), the other returns constant vectors so every
+    # query ties at chance -> the strong model should significantly win.
+    import numpy as np
+
+    queries = {f"q{i}": f"term{i} alpha beta" for i in range(40)}
+    corpus = {f"d{i}": f"term{i} alpha beta" for i in range(40)}
+    corpus["dx"] = "unrelated filler text"
+    qrels = {f"q{i}": {f"d{i}": 1} for i in range(40)}
+    ds = eb.RetrievalDataset(queries, corpus, qrels)
+
+    class ConstantModel(eb.BaseEmbeddingModel):
+        def __init__(self):
+            super().__init__("constant")
+
+        def _encode(self, texts):
+            return np.ones((len(texts), 8), dtype=np.float32)
+
+    results = eb.Benchmark(
+        [eb.DummyModel(dim=128), ConstantModel()],
+        tasks=[eb.RetrievalTask(ds, k_values=[1, 5])],
+    ).run(verbose=False)
+
+    sig = results.significance("ndcg@5", n_permutations=2000)
+    assert {"model_a", "model_b", "delta", "p_value", "significant"} <= set(sig.columns)
+    assert len(sig) == 1  # one unordered pair of two models
+    row = sig.iloc[0]
+    assert row["significant"]  # the difference is real, not noise
+
+    wtl = results.win_tie_loss("ndcg@5", n_permutations=2000)
+    assert set(wtl.columns) == {"score", "wins", "ties", "losses"}
+    # the better model tops the table with exactly one win
+    assert wtl.iloc[0]["wins"] == 1 and wtl.iloc[-1]["losses"] == 1
+
+
+def test_significance_requires_per_sample_data():
+    import pytest
+
+    texts = ["money bank finance", "goal team match sport"] * 5
+    labels = ["fin", "sport"] * 5
+    results = eb.Benchmark(
+        [eb.DummyModel(dim=32)],
+        tasks=[eb.ClassificationTask(eb.ClassificationDataset(texts, labels))],
+    ).run(verbose=False)
+    with pytest.raises(ValueError, match="per-sample data"):
+        results.significance("accuracy")
+
+
+def test_aggregate_ranking_means_quality_metrics():
+    queries = {"q1": "alpha beta", "q2": "gamma delta"}
+    corpus = {"d1": "alpha beta", "d2": "gamma delta", "d3": "zeta eta"}
+    qrels = {"q1": {"d1": 1}, "q2": {"d2": 1}}
+    ds = eb.RetrievalDataset(queries, corpus, qrels)
+    results = eb.Benchmark(
+        [eb.DummyModel(dim=64), eb.DummyModel(dim=32)],
+        tasks=[eb.RetrievalTask(ds, k_values=[1, 5])],
+    ).run(verbose=False)
+
+    overall = results.aggregate_ranking()
+    assert overall and len(overall) == 2  # both models scored
+    # scores are means of quality metrics only -> within [0, 1], perf excluded
+    assert all(0.0 <= score <= 1.0 for _, score in overall)
+    # subsetting to chosen metrics works too
+    subset = results.aggregate_ranking(metrics=["recall@5"])
+    assert {m for m, _ in subset} == {m for m, _ in overall}
+
+
 def test_dataset_validation_rejects_bad_qrels():
     try:
         eb.RetrievalDataset(

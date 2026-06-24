@@ -24,6 +24,9 @@ class Benchmark:
 
     def run(self, verbose: bool = True, skip_errors: bool = True) -> BenchmarkResults:
         rows: list[dict] = []
+        # per-sample metric values, keyed by (model, task, dataset, metric);
+        # used by BenchmarkResults for significance testing.
+        samples: dict[tuple, list] = {}
         for model in self.models:
             for task in self.tasks:
                 label = f"{model.name} | {task.task_type}:{task.name}"
@@ -32,7 +35,7 @@ class Benchmark:
                 model.stats.reset()
                 start = time.perf_counter()
                 try:
-                    metrics = task.evaluate(model)
+                    metrics, metric_samples = task.evaluate_detailed(model)
                 except Exception as exc:  # noqa: BLE001
                     if not skip_errors:
                         raise
@@ -63,9 +66,11 @@ class Benchmark:
                             "value": value,
                         }
                     )
+                for metric, values in metric_samples.items():
+                    samples[(model.name, task.task_type, task.name, metric)] = list(values)
                 if verbose:
                     print(
                         f"  done in {elapsed:.2f}s "
                         f"(encoded {s.n_encoded} texts in {s.seconds:.2f}s)"
                     )
-        return BenchmarkResults(rows)
+        return BenchmarkResults(rows, samples=samples)

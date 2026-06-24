@@ -32,6 +32,9 @@ class RetrievalTask(Task):
         self.k_values = tuple(sorted(k_values))
 
     def evaluate(self, model: BaseEmbeddingModel) -> dict[str, float]:
+        return self.evaluate_detailed(model)[0]
+
+    def evaluate_detailed(self, model: BaseEmbeddingModel):
         ds: RetrievalDataset = self.dataset
         doc_ids = list(ds.corpus.keys())
         doc_pos = {did: i for i, did in enumerate(doc_ids)}
@@ -83,9 +86,11 @@ class RetrievalTask(Task):
                     scores[f"map@{k}"].append(0.0)
 
         # mean per metric, plus the std across queries (spread = how much
-        # the metric varies query-to-query; hidden from the default table)
+        # the metric varies query-to-query; hidden from the default table).
+        # The raw per-query lists are returned as ``samples`` so the reporting
+        # layer can run significance tests between models.
         out = {}
         for m, v in scores.items():
             out[m] = float(np.mean(v))
             out[f"{m}_std"] = float(np.std(v))
-        return out
+        return out, scores
